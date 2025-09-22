@@ -1,0 +1,234 @@
+/* Custom styles for inventory management system */
+body {
+    background-color: #f8f9fa;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.card {
+    border: none;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    border-radius: 10px;
+}
+
+.card-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 10px 10px 0 0 !important;
+    border: none;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    border-radius: 8px;
+    transition: transform 0.2s;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+.table {
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.table thead th {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    color: white;
+    font-weight: 600;
+    padding: 15px 10px;
+}
+
+.table tbody tr {
+    border-bottom: 1px solid #dee2e6;
+}
+
+.table tbody tr:hover {
+    background-color: #f8f9fa;
+    transition: all 0.2s;
+}
+
+/* Optimized column widths for 6-column layout */
+#resultsTable th:nth-child(1) { width: 25%; } /* Item */
+#resultsTable th:nth-child(2) { width: 12%; } /* Sales */
+#resultsTable th:nth-child(3) { width: 12%; } /* Stock */
+#resultsTable th:nth-child(4) { width: 18%; } /* Command */
+#resultsTable th:nth-child(5) { width: 18%; } /* Order From */
+#resultsTable th:nth-child(6) { width: 15%; } /* Available Qty */
+
+/* Enhanced styling for the simplified table */
+.command-text {
+    color: #0d6efd;
+    font-weight: 700;
+    font-size: 0.95rem;
+}
+
+.status-ok {
+    background-color: #d4edda !important;
+    color: #155724;
+}
+
+.status-order {
+    background-color: #fff3cd !important;
+    color: #856404;
+}
+
+.status-insufficient {
+    background-color: #f8d7da !important;
+    color: #721c24;
+}
+
+.status-zero {
+    background-color: #ffe6e6 !important;
+    color: #d63384;
+    font-weight: bold;
+}
+
+header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+}
+
+.form-control:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+}
+
+.spinner-border-sm {
+    width: 1rem;
+    height: 1rem;
+}
+
+#resultsContainer {
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.table-responsive {
+    border-radius: 8px;
+}
+
+.alert {
+    border-radius: 8px;
+    border: none;
+}
+
+.form-select:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+}
+
+.table-danger {
+    background-color: rgba(220, 53, 69, 0.1);
+}
+
+.table-warning {
+    background-color: rgba(255, 193, 7, 0.1);
+}
+
+.table-success {
+    background-color: rgba(25, 135, 84, 0.1);
+}
+
+.table-info {
+    background-color: rgba(13, 202, 240, 0.1);
+}
+
+/* Zero stock highlighting */
+.table-zero-stock {
+    background-color: rgba(220, 53, 69, 0.15) !important;
+    border-left: 4px solid #dc3545;
+}
+
+.zero-stock-badge {
+    background-color: #dc3545;
+    color: white;
+    font-weight: bold;
+}
+
+/* Filter styling */
+#statusFilter option {
+    padding: 8px;
+}
+
+.filter-info {
+    margin-bottom: 15px;
+    font-size: 0.9rem;
+}
+
+#statusFilter {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 16px 12px;
+}
+
+/* Better mobile responsiveness */
+@media (max-width: 768px) {
+    #resultsTable th:nth-child(1) { width: 30%; } /* Item gets more space on mobile */
+    #resultsTable th:nth-child(2) { width: 10%; } /* Sales */
+    #resultsTable th:nth-child(3) { width: 10%; } /* Stock */
+    #resultsTable th:nth-child(4) { width: 20%; } /* Command */
+    #resultsTable th:nth-child(5) { width: 15%; } /* Order From */
+    #resultsTable th:nth-child(6) { width: 15%; } /* Available Qty */
+    
+    .table-responsive {
+        font-size: 0.85rem;
+    }
+    
+    #resultsTable th {
+        padding: 8px 4px;
+        font-size: 0.75rem;
+    }
+}
+
+/* Filter info styling */
+.filter-info {
+    margin-bottom: 15px;
+    font-size: 0.9rem;
+    border-left: 4px solid #0d6efd;
+    background-color: #e7f1ff;
+    border-color: #b6d4fe;
+}
+
+.filter-info.alert-info {
+    color: #055160;
+}
+
+/* Enhanced styling for zero sales and zero stock items */
+.badge.bg-secondary {
+    background-color: #6c757d !important;
+    font-size: 0.75rem;
+}
+
+.zero-stock-badge {
+    background-color: #dc3545;
+    color: white;
+    font-weight: bold;
+    font-size: 0.75rem;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.7; }
+    100% { opacity: 1; }
+}
+
+/* Enhanced zero stock row styling */
+.table-zero-stock {
+    background-color: rgba(220, 53, 69, 0.15) !important;
+    border-left: 4px solid #dc3545;
+}
+
+.table-zero-stock:hover {
+    background-color: rgba(220, 53, 69, 0.25) !important;
+}
+
+/* No sales badge styling */
+.badge.bg-secondary {
+    opacity: 0.8;
+}
+
