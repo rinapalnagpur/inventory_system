@@ -40,9 +40,11 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     function displayResults(data) {
+        // Sort by Item Name alphabetically before display
+        const sortedData = [...data].sort((a, b) => a['Item Name'].localeCompare(b['Item Name']));
         const tbody = document.querySelector('#resultsTable tbody');
         tbody.innerHTML = '';
-        data.forEach(item => {
+        sortedData.forEach(item => {
             const row = createTableRow(item);
             tbody.appendChild(row);
         });
@@ -66,51 +68,87 @@ document.addEventListener('DOMContentLoaded', function() {
         return row;
     }
 
-function filterResults() {
-    const search = searchInput.value.toLowerCase();
-    const filter = statusFilter.value;
-    let filtered = currentData.filter(item =>
-        item['Item Name'].toLowerCase().includes(search)
-    );
-    
-    if (filter && filter !== '') {
-        if (filter === 'All Orders') {
-            // Show all items regardless of order need
-            // No extra filter applied here
-        } else if (filter === 'No Orders') {
-            filtered = filtered.filter(item =>
-                item['Command'] === 0 || item['Order From Location'] === 'Not Available'
-            );
-        } else {
-            // For other filters, show only items which need ordering (Command > 0)
-            filtered = filtered.filter(item =>
-                (item['Command'] !== 0 && item['Command'] !== '0') &&
-                item['Order From Location'] !== 'Not Available'
-            );
-            if (filter === 'From Warehouse') {
-                filtered = filtered.filter(item =>
-                    item['Order From Location'].toLowerCase().includes('warehouse')
-                );
-            } else if (filter === 'From Shops') {
-                filtered = filtered.filter(item =>
-                    item['Order From Location'].toLowerCase().includes('shop') &&
-                    !item['Order From Location'].toLowerCase().includes('warehouse')
-                );
-            } else if (filter === 'Insufficient Stock') {
-                filtered = filtered.filter(item =>
-                    item['Order From Location'].toLowerCase().includes('insufficient')
-                );
-            } else if (filter === 'Zero Stock') {
-                filtered = filtered.filter(item =>
-                    parseFloat(item['Stock']) <= 0
-                );
+    function isShopLocation(location) {
+        // Returns true if Order From Location is a single shop (e.g., "Shop 02")
+        // Adjust as needed for your shop naming pattern
+        const loc = location.trim().toLowerCase();
+        return loc.startsWith('shop') && !loc.includes('warehouse') && !loc.includes('insufficient');
+    }
+
+    function getAvailableShopQty(item) {
+        // Attempts to extract quantity for the shop from Available Qty field
+        // If 'Available Qty' is "Shop 02: 3" or just "3", will parse as number
+        let qty = 0;
+        if (item['Available Qty']) {
+            // If format is like "Shop 02: 3" or just "3"
+            if (typeof item['Available Qty'] === 'string') {
+                // Remove label if present
+                let parts = item['Available Qty'].split(':');
+                let val = parts.length > 1 ? parts[1] : parts[0];
+                qty = parseFloat(val.trim());
+            } else {
+                qty = parseFloat(item['Available Qty']);
             }
         }
+        return isNaN(qty) ? 0 : qty;
     }
-    
-    displayResults(filtered);
-    showFilterInfo(filtered.length, currentData.length, filter || 'All Orders');
-}
+
+    function filterResults() {
+        const search = searchInput.value.toLowerCase();
+        const filter = statusFilter.value;
+        let filtered = currentData.filter(item =>
+            item['Item Name'].toLowerCase().includes(search)
+        );
+
+        if (filter && filter !== '') {
+            if (filter === 'All Orders') {
+                // Show all items
+            } else if (filter === 'Command') {
+                filtered = filtered.filter(item => {
+                    if (Number(item['Command']) > 0 &&
+                        item['Order From Location'] !== 'Not Available') {
+                        // If location is shop, only include if available qty >= 5
+                        if (isShopLocation(item['Order From Location'])) {
+                            return getAvailableShopQty(item) >= 5;
+                        }
+                        // Always include warehouse/insufficient
+                        return true;
+                    }
+                    return false;
+                });
+            } else if (filter === 'No Orders') {
+                filtered = filtered.filter(item =>
+                    item['Command'] === 0 || item['Order From Location'] === 'Not Available'
+                );
+            } else {
+                filtered = filtered.filter(item =>
+                    (item['Command'] !== 0 && item['Command'] !== '0') &&
+                    item['Order From Location'] !== 'Not Available'
+                );
+                if (filter === 'From Warehouse') {
+                    filtered = filtered.filter(item =>
+                        item['Order From Location'].toLowerCase().includes('warehouse')
+                    );
+                } else if (filter === 'From Shops') {
+                    // For shop results, require Available Qty >= 5
+                    filtered = filtered.filter(item =>
+                        isShopLocation(item['Order From Location']) &&
+                        getAvailableShopQty(item) >= 5
+                    );
+                } else if (filter === 'Insufficient Stock') {
+                    filtered = filtered.filter(item =>
+                        item['Order From Location'].toLowerCase().includes('insufficient')
+                    );
+                } else if (filter === 'Zero Stock') {
+                    filtered = filtered.filter(item =>
+                        parseFloat(item['Stock']) <= 0
+                    );
+                }
+            }
+        }
+        displayResults(filtered);
+        showFilterInfo(filtered.length, currentData.length, filter || 'All Orders');
+    }
 
     searchInput.addEventListener('input', filterResults);
     statusFilter.addEventListener('change', filterResults);

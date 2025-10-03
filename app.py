@@ -12,6 +12,7 @@ UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'xlsx', 'xls'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 latest_results_df = None
+latest_full_results = None
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 def allowed_file(filename):
@@ -22,7 +23,6 @@ def find_column(df, keywords):
         for keyword in keywords:
             if keyword.lower() in col.lower():
                 return col
-    # Fallback to column positions if no match found
     if 'sales' in keywords or 'sale' in keywords or 'qty' in keywords:
         if len(df.columns) > 1:
             return df.columns[1]
@@ -64,7 +64,7 @@ def index():
 
 @app.route('/upload', methods=['POST'])
 def upload_files():
-    global latest_results_df
+    global latest_results_df, latest_full_results
     try:
         if 'sales_file' not in request.files or 'stock_file' not in request.files:
             return jsonify({'error': 'Both sales and stock files are required'}), 400
@@ -81,6 +81,7 @@ def upload_files():
         stock_df = pd.read_excel(stock_file)
         results = process_inventory_data(sales_df, stock_df, sales_days, forecast_days, selected_shop)
         latest_results_df = pd.DataFrame(results)
+        latest_full_results = results
         return jsonify({
             'success': True,
             'data': results,
@@ -109,19 +110,45 @@ def process_inventory_data(sales_df, stock_df, sales_days, forecast_days, select
     location_columns = [col for col in stock_columns[1:] if col != carton_col]
 
     results = []
-    for _, row in sales_df.iterrows():
-        item_name = str(row[item_col]).strip()
-        if not item_name or item_name == 'nan':
+
+    all_items = set(sales_df[item_col].astype(str).str.strip()) | set(stock_df[item_col_stock].astype(str).str.strip())
+
+    for item_name in all_items:
+        item_name = str(item_name).strip()
+        if not item_name or item_name.lower() == 'nan':
             continue
-        current_sale = float(row[sales_col])
-        current_stock = float(row[stock_col])
-        forecast_qty = float(row['forecast_qty'])
-        order_qty = float(row['order_qty'])
-        stock_match = stock_df[stock_df[item_col_stock].astype(str).str.strip() == item_name]
-        if stock_match.empty:
-            results.append(create_no_stock_result(item_name, current_sale, current_stock, forecast_qty, order_qty, selected_shop))
+
+        sales_row = sales_df[sales_df[item_col].astype(str).str.strip() == item_name]
+        stock_row = stock_df[stock_df[item_col_stock].astype(str).str.strip() == item_name]
+
+        if sales_row.empty and not stock_row.empty:
+            row = stock_row.iloc[0]
+            current_sale = 0.0
+            current_stock = safe_float_convert(row[location_columns[0]]) if location_columns else 0.0
+            if current_stock < 10:
+                forecast_qty = 0
+                order_qty = 10 - current_stock
+                results.append(process_item_with_stock_for_shop(row, item_name, current_sale, current_stock, forecast_qty, order_qty, location_columns, carton_col, selected_shop))
+            else:
+                results.append(create_no_stock_result(item_name, current_sale, current_stock, 0, 0, selected_shop))
+
+        elif not sales_row.empty:
+            row = sales_row.iloc[0]
+            current_sale = float(row[sales_col])
+            current_stock = float(row[stock_col])
+            forecast_qty = float(row['forecast_qty'])
+            order_qty = float(row['order_qty'])
+            if current_sale == 0 and current_stock < 10:
+                forecast_qty = 0
+                order_qty = 10 - current_stock
+            stock_match = stock_df[stock_df[item_col_stock].astype(str).str.strip() == item_name]
+            if stock_match.empty:
+                results.append(create_no_stock_result(item_name, current_sale, current_stock, forecast_qty, order_qty, selected_shop))
+            else:
+                results.append(process_item_with_stock_for_shop(stock_match.iloc[0], item_name, current_sale, current_stock, forecast_qty, order_qty, location_columns, carton_col, selected_shop))
         else:
-            results.append(process_item_with_stock_for_shop(stock_match.iloc[0], item_name, current_sale, current_stock, forecast_qty, order_qty, location_columns, carton_col, selected_shop))
+            results.append(create_no_stock_result(item_name, 0, 0, 0, 0, selected_shop))
+
     return results
 
 def create_no_stock_result(item_name, current_sale, current_stock, forecast_qty, order_qty, selected_shop):
@@ -167,21 +194,22 @@ def get_max_shop_stock(shop_stocks):
     return None, 0
 
 def process_item_with_stock_for_shop(stock_row, item_name, current_sale, current_stock, forecast_qty, order_qty, location_columns, carton_col, selected_shop):
-    carton_size = get_carton_size(stock_row, carton_col)
+    # ALL sources now use rounding to nearest 5
+    step_size = 5
     warehouse_qty = get_warehouse_stock(stock_row, location_columns)
     other_shop_stocks = get_other_shop_stocks(stock_row, location_columns, selected_shop)
     max_shop_name, max_shop_qty = get_max_shop_stock(other_shop_stocks)
 
     if warehouse_qty >= order_qty:
-        command_qty = int(round_up_to_step(order_qty, carton_size))
+        command_qty = int(round_up_to_step(order_qty, step_size))
         command_source = "Warehouse"
         command_avail = str(int(warehouse_qty))
     elif max_shop_name and max_shop_qty >= order_qty:
-        command_qty = int(round_up_to_step(order_qty, 5))
+        command_qty = int(round_up_to_step(order_qty, step_size))
         command_source = max_shop_name
         command_avail = str(int(max_shop_qty))
     else:
-        command_qty = int(round_up_to_step(order_qty, 5))
+        command_qty = int(round_up_to_step(order_qty, step_size))
         command_source = "Insufficient Stock"
         if warehouse_qty > 0 and max_shop_qty > 0:
             command_avail = f"WH: {int(warehouse_qty)}, {max_shop_name}: {int(max_shop_qty)}"
@@ -212,16 +240,104 @@ def process_item_with_stock_for_shop(stock_row, item_name, current_sale, current
 
 @app.route('/export', methods=['POST'])
 def export_filtered():
-    data = request.get_json(force=True)
-    df = pd.DataFrame(data)
+    global latest_full_results
+    filtered_data = request.get_json(force=True)
+    filtered_df = pd.DataFrame(filtered_data)
+    all_df = pd.DataFrame(latest_full_results if latest_full_results is not None else filtered_data)
+    
+    if not filtered_df.empty and 'Item Name' in filtered_df.columns:
+        filtered_df = filtered_df.sort_values('Item Name')
+    if not all_df.empty and 'Item Name' in all_df.columns:
+        all_df = all_df.sort_values('Item Name')
+    
+    total_items = len(all_df)
+    low_stock_count = (all_df['Stock'].apply(lambda x: float(str(x).replace(",", "")) if str(x).replace(",", "").replace(".", "").isdigit() else 0) < 10).sum()
+    zero_stock_count = (all_df['Stock'].apply(lambda x: float(str(x).replace(",", "")) if str(x).replace(",", "").replace(".", "").isdigit() else 0) == 0).sum()
+    order_needed_count = (all_df['Command'].apply(lambda x: float(str(x).replace(",", "")) if str(x).replace(",", "").replace(".", "").isdigit() else 0) > 0).sum()
+    summary_df = pd.DataFrame([
+        {"Metric": "Total Items", "Value": total_items},
+        {"Metric": "Low Stock (<10)", "Value": int(low_stock_count)},
+        {"Metric": "Zero Stock (0)", "Value": int(zero_stock_count)},
+        {"Metric": "Order Needed (Command > 0)", "Value": int(order_needed_count)}
+    ])
+
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        df.to_excel(writer, index=False, sheet_name='Filtered Orders')
+        filtered_df.to_excel(writer, index=False, sheet_name='Filtered Orders')
+        all_df.to_excel(writer, index=False, sheet_name='All Items')
+        summary_df.to_excel(writer, index=False, sheet_name='Summary')
+
+        workbook = writer.book
+
+        header_format = workbook.add_format({
+            'bold': True,
+            'font_color': 'white',
+            'font_size': 12,
+            'bg_color': '#3E50B4',
+            'border': 1,
+            'align': 'center',
+            'valign': 'vcenter'
+        })
+        item_format = workbook.add_format({
+            'font_name': 'Calibri',
+            'font_size': 12,
+            'border': 1,
+            'align': 'left',
+            'valign': 'vcenter'
+        })
+        number_format = workbook.add_format({
+            'font_name': 'Calibri',
+            'font_size': 12,
+            'border': 1,
+            'align': 'center',
+            'valign': 'vcenter',
+            'num_format': '0'
+        })
+        cell_format = workbook.add_format({
+            'font_name': 'Calibri',
+            'font_size': 12,
+            'border': 1,
+            'align': 'center',
+            'valign': 'vcenter'
+        })
+        summary_cell_format = workbook.add_format({
+            'border': 1,
+            'font_name': 'Calibri',
+            'font_size': 12,
+            'align': 'left'
+        })
+
+        for sheet_name, df in [
+            ('Filtered Orders', filtered_df),
+            ('All Items', all_df),
+            ('Summary', summary_df)
+        ]:
+            worksheet = writer.sheets[sheet_name]
+            (max_row, max_col) = df.shape
+            if max_col > 0:
+                worksheet.autofilter(0, 0, max_row, max_col - 1)
+                for col_num, value in enumerate(df.columns.values):
+                    worksheet.write(0, col_num, value, header_format)
+                    worksheet.set_column(col_num, col_num, 19)
+                for row in range(1, max_row + 1):
+                    for col in range(max_col):
+                        if sheet_name in ['Filtered Orders', 'All Items'] and col == 0:
+                            worksheet.write(row, col, df.iloc[row-1, col], item_format)
+                        elif sheet_name in ['Filtered Orders', 'All Items'] and col in [1, 2, 3]:
+                            try:
+                                val = int(float(df.iloc[row-1, col]))
+                            except:
+                                val = df.iloc[row-1, col]
+                            worksheet.write(row, col, val, number_format)
+                        elif sheet_name == 'Summary':
+                            worksheet.write(row, col, df.iloc[row-1, col], summary_cell_format)
+                        else:
+                            worksheet.write(row, col, df.iloc[row-1, col], cell_format)
     output.seek(0)
     return send_file(
         output,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        download_name='filtered_orders.xlsx',
+        download_name='advanced_orders_export.xlsx',
         as_attachment=True
     )
 
