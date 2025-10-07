@@ -21,7 +21,7 @@ def allowed_file(filename):
 def find_column(df, keywords):
     for col in df.columns:
         for keyword in keywords:
-            if keyword.lower() in col.lower():
+            if str(keyword).lower() in str(col).lower():
                 return col
     if 'sales' in keywords or 'sale' in keywords or 'qty' in keywords:
         if len(df.columns) > 1:
@@ -115,7 +115,7 @@ def process_inventory_data(sales_df, stock_df, sales_days, forecast_days, select
 
     for item_name in all_items:
         item_name = str(item_name).strip()
-        if not item_name or item_name.lower() == 'nan':
+        if not item_name or str(item_name).lower() == 'nan':
             continue
 
         sales_row = sales_df[sales_df[item_col].astype(str).str.strip() == item_name]
@@ -181,7 +181,7 @@ def get_other_shop_stocks(stock_row, location_columns, selected_shop):
     other_shop_stocks = {}
     for col in location_columns:
         col_lower = str(col).lower()
-        if ('warehouse' not in col_lower and col != selected_shop and 'shop' in col_lower):
+        if ('warehouse' not in col_lower and str(col) != str(selected_shop) and 'shop' in col_lower):
             qty = safe_float_convert(stock_row[col], 0)
             if qty > 0:
                 other_shop_stocks[col] = qty
@@ -194,7 +194,6 @@ def get_max_shop_stock(shop_stocks):
     return None, 0
 
 def process_item_with_stock_for_shop(stock_row, item_name, current_sale, current_stock, forecast_qty, order_qty, location_columns, carton_col, selected_shop):
-    # ALL sources now use rounding to nearest 5
     step_size = 5
     warehouse_qty = get_warehouse_stock(stock_row, location_columns)
     other_shop_stocks = get_other_shop_stocks(stock_row, location_columns, selected_shop)
@@ -226,7 +225,7 @@ def process_item_with_stock_for_shop(stock_row, item_name, current_sale, current
         sources.append("Warehouse")
         availabilities.append(str(int(warehouse_qty)))
     if max_shop_name and max_shop_qty > 0:
-        sources.append(max_shop_name)
+        sources.append(str(max_shop_name))
         availabilities.append(str(int(max_shop_qty)))
 
     return {
@@ -342,4 +341,6 @@ def export_filtered():
     )
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    import os
+    port = int(os.environ.get('PORT', 5000))
+    app.run(debug=False, host='0.0.0.0', port=port)
