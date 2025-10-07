@@ -78,9 +78,11 @@ def upload_files():
         forecast_days = int(request.form.get('forecast_days', 2))
         selected_shop = request.form.get('selected_shop', 'Shop 01')
 
-        # Process only columns A to K (first 11 columns, index 0-10) and first 2500 rows
-        sales_df = pd.read_excel(sales_file, nrows=2500, usecols="A:K")
-        stock_df = pd.read_excel(stock_file, nrows=2500, usecols="A:K")
+        # Read first 2500 rows, then keep only first 11 columns (safe for any file)
+        sales_df = pd.read_excel(sales_file, nrows=2500)
+        sales_df = sales_df.iloc[:, :11]
+        stock_df = pd.read_excel(stock_file, nrows=2500)
+        stock_df = stock_df.iloc[:, :11]
 
         results = process_inventory_data(sales_df, stock_df, sales_days, forecast_days, selected_shop)
         latest_results_df = pd.DataFrame(results)
@@ -89,7 +91,7 @@ def upload_files():
             'success': True,
             'data': results,
             'selected_shop': selected_shop,
-            'message': f'Processed {len(results)} items for {selected_shop} successfully (limited to first 2500 rows & columns A-K)'
+            'message': f'Processed {len(results)} items for {selected_shop} successfully (limited to first 2500 rows & max 11 columns)'
         })
     except Exception as e:
         import traceback
